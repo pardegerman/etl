@@ -13,8 +13,8 @@ type MetadataProperties struct {
 	TableKeyProperties []string `json:"table-key-properties,omitempty"`
 	SqlDataType        string   `json:"sql-datatype,omitempty"`
 	Selected           *bool    `json:"selected,omitempty"`
-	ReplicationMethod  string   `json:"replication_method,omitempty"`
-	ReplicationKey     string   `json:"replication_key,omitempty"`
+	ReplicationMethod  string   `json:"replication-method,omitempty"`
+	ReplicationKey     string   `json:"replication-key,omitempty"`
 
 	/*
 		Inclusion               string   `json:"inclusion"`

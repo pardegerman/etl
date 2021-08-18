@@ -38,7 +38,7 @@ func contains(s []string, searchterm string) bool {
 
 // enrichCmd represents the catalog command
 var enrichCmd = &cobra.Command{
-	Use:   "enrich",
+	Use:   "enrich <DATABASE>",
 	Short: "Enrich the catalog provided by a tap ran in discovery mode",
 	Long: `When a tap is ran in discovery mode it provides a list of
 streams, a catalog. Using this action, the information
@@ -46,6 +46,7 @@ in the configuration file is used to enrich the catalog
 by adding non discoverable items. Feed the original
 catalog on STDIN and the enriched catalog will be provided
 on STDOUT.`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := viper.Sub("enrich")
 		replicationMethod := cfg.GetString("replication-method")
@@ -53,36 +54,37 @@ on STDOUT.`,
 		excludeDatabases := cfg.GetStringSlice("exclude-databases")
 		excludeTables := cfg.GetStringSlice("exclude-tables")
 
-		// Read the singer catalog from STDIN
-		catalog, err := singer.ReadCatalog(os.Stdin)
-		cobra.CheckErr(err)
-
 		// Prepare to use the contains for slices by sorting the exclude-* slices
 		sort.Strings(excludeDatabases)
 		sort.Strings(excludeTables)
 		selected := true
 
-		for _, stream := range catalog.Streams {
-			var dbName, tblName string
+		dbName := args[0]
+		if contains(excludeDatabases, dbName) {
+			err := fmt.Errorf("Database %s is marked for exclusion, nothing will be selected", dbName)
+			cobra.CheckErr(err)
+		}
 
-			tblName = stream.TableName
-			for _, metaData := range stream.Metadata {
-				if metaData.MetadataProps.DatabaseName != "" {
-					dbName = metaData.MetadataProps.DatabaseName
-					if !contains(excludeDatabases, dbName) {
-						if !contains(excludeTables, tblName) {
-							metaData.MetadataProps.Selected = &selected
-							metaData.MetadataProps.ReplicationMethod = replicationMethod
-							metaData.MetadataProps.ReplicationKey = replicationKey
-						}
+		// Read the singer catalog from STDIN
+		catalog, err := singer.ReadCatalog(os.Stdin)
+		cobra.CheckErr(err)
+
+		for _, stream := range catalog.Streams {
+			if !contains(excludeTables, stream.TableName) {
+				for _, metaData := range stream.Metadata {
+					if len(metaData.Breadcrumb) == 0 && metaData.MetadataProps.DatabaseName == dbName {
+						metaData.MetadataProps.Selected = &selected
+						metaData.MetadataProps.ReplicationMethod = replicationMethod
+						metaData.MetadataProps.ReplicationKey = replicationKey
+						break
 					}
-					break
 				}
 			}
 		}
 
 		out, err := catalog.Dump()
 		cobra.CheckErr(err)
+
 		fmt.Fprint(os.Stdout, out)
 	},
 }
