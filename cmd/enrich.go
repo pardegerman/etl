@@ -31,6 +31,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var replicationMethod, replicationKey string
+
 func contains(s []string, searchterm string) bool {
 	i := sort.SearchStrings(s, searchterm)
 	return i < len(s) && s[i] == searchterm
@@ -48,11 +50,8 @@ catalog on STDIN and the enriched catalog will be provided
 on STDOUT.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := viper.Sub("enrich")
-		replicationMethod := cfg.GetString("replication-method")
-		replicationKey := cfg.GetString("replication-key")
-		excludeDatabases := cfg.GetStringSlice("exclude-databases")
-		excludeTables := cfg.GetStringSlice("exclude-tables")
+		excludeDatabases := viper.GetStringSlice("exclude-databases")
+		excludeTables := viper.GetStringSlice("exclude-tables")
 
 		// Prepare to use the contains for slices by sorting the exclude-* slices
 		sort.Strings(excludeDatabases)
@@ -61,7 +60,7 @@ on STDOUT.`,
 
 		dbName := args[0]
 		if contains(excludeDatabases, dbName) {
-			err := fmt.Errorf("Database %s is marked for exclusion, nothing will be selected", dbName)
+			err := fmt.Errorf("database %s is marked for exclusion, nothing will be selected", dbName)
 			cobra.CheckErr(err)
 		}
 
@@ -92,17 +91,18 @@ on STDOUT.`,
 func init() {
 	rootCmd.AddCommand(enrichCmd)
 
-	enrichCmd.PersistentFlags().String("replication-method", "LOG_BASED", "The default replication method to use")
-	viper.BindPFlag("enrich.replication-method", enrichCmd.Flags().Lookup("replication-method"))
-	viper.SetDefault("enrich.replication-method", "LOG_BASED")
+	enrichCmd.PersistentFlags().StringVar(&replicationMethod, "replication-method", "LOG_BASED", "The default replication method to use")
+	// viper.BindPFlag("enrich.replication-method", enrichCmd.Flags().Lookup("replication-method"))
+	// viper.SetDefault("enrich.replication-method", "LOG_BASED")
 
-	enrichCmd.PersistentFlags().String("replication-key", "", "The default replication key to use")
-	viper.BindPFlag("enrich.replication-key", enrichCmd.Flags().Lookup("replication-key"))
+	enrichCmd.PersistentFlags().StringVar(&replicationKey, "replication-key", "", "The replication key to use")
+	// viper.BindPFlag("enrich.replication-key", enrichCmd.Flags().Lookup("replication-key"))
 
-	enrichCmd.PersistentFlags().StringSlice("exclude-databases", nil, "List of databases to exclude from replication")
-	viper.BindPFlag("enrich.exclude-databases", enrichCmd.Flags().Lookup("exclude-databases"))
+	/*
+		enrichCmd.PersistentFlags().StringSlice("exclude-databases", nil, "List of databases to exclude from replication")
+		viper.BindPFlag("enrich.exclude-databases", enrichCmd.Flags().Lookup("exclude-databases"))
 
-	enrichCmd.PersistentFlags().StringSlice("exclude-tables", nil, "List of tables to exclude from replication")
-	viper.BindPFlag("enrich.exclude-tables", enrichCmd.Flags().Lookup("exclude-tables"))
-
+		enrichCmd.PersistentFlags().StringSlice("exclude-tables", nil, "List of tables to exclude from replication")
+		viper.BindPFlag("enrich.exclude-tables", enrichCmd.Flags().Lookup("exclude-tables"))
+	*/
 }

@@ -23,12 +23,21 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
+	"sort"
 
 	"github.com/pardegerman/etl/singer"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
+
+type entry struct {
+	Database string
+	Table    string
+	Rows     int
+}
+
+var dbOnly bool
 
 // inventoryCmd represents the inventory command
 var inventoryCmd = &cobra.Command{
@@ -40,15 +49,16 @@ piping the output of a tap discovery run into etl. The
 result is provided as a flat csv on STDOUT to be consumed
 by other commands or written to a file.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		excludeDatabases := viper.GetStringSlice("exclude-databases")
+		excludeTables := viper.GetStringSlice("exclude-tables")
+		sort.Strings(excludeDatabases)
+		sort.Strings(excludeTables)
+
 		// Read the singer catalog from STDIN
 		catalog, err := singer.ReadCatalog(os.Stdin)
-		if err != nil {
-			log.Fatal(err)
-		}
+		cobra.CheckErr(err)
 
-		// Print csv header
-		fmt.Fprintf(os.Stdout, "Database name,Table name,Number of rows\n")
-
+		databases := make(map[string][]entry)
 		for _, stream := range catalog.Streams {
 			var dbName, tblName string
 			var numRows int
@@ -63,9 +73,24 @@ by other commands or written to a file.`,
 					break
 				}
 			}
+			databases[dbName] = append(databases[dbName], entry{dbName, tblName, numRows})
+		}
 
-			if dbName != "" && tblName != "" {
-				fmt.Fprintf(os.Stdout, "%s,%s,%d\n", dbName, tblName, numRows)
+		// Print csv header
+		if !dbOnly {
+			fmt.Fprintf(os.Stdout, "Database name,Table name,Number of rows\n")
+		}
+		for db, tables := range databases {
+			if !contains(excludeDatabases, db) {
+				if dbOnly {
+					fmt.Fprintln(os.Stdout, db)
+				} else {
+					for _, table := range tables {
+						if !contains(excludeTables, table.Table) {
+							fmt.Fprintf(os.Stdout, "%s,%s,%d\n", db, table.Table, table.Rows)
+						}
+					}
+				}
 			}
 		}
 	},
@@ -73,4 +98,6 @@ by other commands or written to a file.`,
 
 func init() {
 	rootCmd.AddCommand(inventoryCmd)
+
+	inventoryCmd.PersistentFlags().BoolVar(&dbOnly, "dbonly", false, "Only print dbname")
 }
